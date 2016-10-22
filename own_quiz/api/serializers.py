@@ -1,39 +1,87 @@
 from quiz.models import Quiz, QuizQuestion, QuestionChoiceAnswer, QuizChoiceResult, QuizInstance, QuizInstanceAnswer
 from rest_framework import serializers
-"""
-class CreateImportJobSerializer(serializers.Serializer):
-    import_file = serializers.FileField()
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 
-class ImportJobSerializer(serializers.ModelSerializer):
-    mappings = serializers.SerializerMethodField()
-    headers = serializers.SerializerMethodField()
-    system_fields = serializers.SerializerMethodField()
-    rejected = serializers.SerializerMethodField()
+class UserSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
-        model = ImportJob
-        fields = ('id', 'import_file', 'rejected', 'headers', 'summary', 'is_completed', 'duplicate_handling', 'system_fields', 'mappings')
-        read_only_fields = ('import_file', 'rejected', 'headers', 'summary', 'is_completed', 'mappings')
-
-    def get_mappings(self, obj):
-        return ImportMappingField.get_job_mappings(import_job=obj)
-
-    def get_headers(self, obj):
-        return obj.get_file_headers()
-
-    def get_system_fields(self, obj):
-        return ImportSystemField.get_system_fields()
-
-    def get_rejected(self, obj):
-        request = self.context['request']
-        if obj.is_job_completed() and obj.is_rejected_entries():
-            return request.build_absolute_uri(obj.rejected.url)
-        return ""
-"""
+        model = User
+        fields = ('id', 'email', 'username', 'first_name', 'last_name')
 
 
-class QuizSerializer(serializers.ModelSerializer):
+class QuestionChoiceAnswerSerializer(serializers.HyperlinkedModelSerializer):
+
+    class Meta:
+        model = QuestionChoiceAnswer
+        fields = ('id', 'text_answer', 'image_answer', 'value')
+
+
+class QuizQuestionSerializer(serializers.HyperlinkedModelSerializer):
+    quiz_question_choice_answers = QuestionChoiceAnswerSerializer(many=True)
+
+    class Meta:
+        model = QuizQuestion
+        fields = ('id', 'image', 'question', 'quiz_question_choice_answers')
+
+
+class QuizChoiceResultSerializer(serializers.HyperlinkedModelSerializer):
+
+    class Meta:
+        model = QuizChoiceResult
+        fields = ('id', 'description', 'image', 'low_value', 'high_value')
+
+
+class QuizSerializer(serializers.HyperlinkedModelSerializer):
+    owner = UserSerializer()
+    quiz_questions = QuizQuestionSerializer(many=True)
 
     class Meta:
         model = Quiz
+        fields = ('id', 'title', 'slug', 'owner', 'description', 'featured_image', 'quiz_questions')
+
+
+class QuizInstanceAnswerSerializer(serializers.HyperlinkedModelSerializer):
+    question = QuizQuestionSerializer()
+    answer = QuestionChoiceAnswerSerializer()
+
+    class Meta:
+        model = QuizInstanceAnswer
+        fields = ('question', 'answer')
+
+
+class QuizInstanceSerializer(serializers.HyperlinkedModelSerializer):
+    quiz_instance_answers = QuizInstanceAnswerSerializer(many=True)
+    quiz_result = serializers.SerializerMethodField()
+    total_value = serializers.SerializerMethodField()
+
+    class Meta:
+        model = QuizInstance
+        fields = ('id', 'external_code', 'user', 'is_completed', 'quiz_instance_answers', 'quiz_result', 'total_value')
+
+    def get_total_value(self, obj):
+        return obj.get_result_value()
+
+    def get_quiz_result(self, obj):
+        result_value = obj.get_result_value()
+        quiz = obj.quiz
+
+        result = quiz.get_quiz_result(value=result_value)
+
+        if result:
+            serializer = QuizChoiceResultSerializer(result)
+            return serializer.data
+        return ""
+
+
+class QuizInstanceSubmitAnswerSerializer(serializers.Serializer):
+    quiz_instance_answers = serializers.JSONField(required=True)
+
+    def validate_quiz_instance_answers(self, quiz_instance_answers):
+        # validate if quiz answer is owned by quiz question
+        quiz_instance = self.context['quiz_instance']
+        cleaned_quiz_instance_answers, error = quiz_instance.validate_quiz_instance(data=quiz_instance_answers)
+        if error:
+            raise serializers.ValidationError(error)
+        return cleaned_quiz_instance_answers
