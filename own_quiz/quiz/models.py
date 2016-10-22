@@ -132,8 +132,8 @@ class QuizInstance(models.Model):
             if question_id not in key_list:
                 l.append('This question is required')
                 error_message[question_id] = l
-            if error_message:
-                return data, error_message
+        if error_message:
+            return data, error_message
 
         for key, value in data.items():
             # check if all there's any invalid question submitted
