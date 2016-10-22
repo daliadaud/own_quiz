@@ -1,0 +1,9 @@
+Django==1.10.2
+Markdown==2.6.7
+Pillow==3.4.1
+django-filter==0.15.2
+django-nested-admin==3.0.10
+djangorestframework==3.4.7
+psycopg2==2.6.2
+python-monkey-business==1.0.0
+six==1.10.0
